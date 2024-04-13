@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import cv2
 import torch
+import spaces
 
 from diffusers import AutoencoderKL, DDIMScheduler
 from einops import repeat
@@ -14,21 +15,20 @@ from omegaconf import OmegaConf
 from PIL import Image
 from torchvision import transforms
 from transformers import CLIPVisionModelWithProjection
-from scipy.interpolate import interp1d
 
 from src.models.pose_guider import PoseGuider
 from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
 from src.pipelines.pipeline_pose2vid_long import Pose2VideoPipeline
-from src.utils.util import get_fps, read_frames, save_videos_grid
+from src.utils.util import get_fps, read_frames, save_videos_grid, save_pil_imgs
 
 from src.audio_models.model import Audio2MeshModel
 from src.utils.audio_util import prepare_audio_feature
 from src.utils.mp_utils  import LMKExtractor
 from src.utils.draw_util import FaceMeshVisualizer
 from src.utils.pose_util import project_points, project_points_with_trans, matrix_to_euler_and_translation, euler_and_translation_to_matrix
-from src.utils.util import crop_face
-from scripts.vid2vid import smooth_pose_seq
+from src.utils.crop_face_single import crop_face
+from src.audio2vid import get_headpose_temp, smooth_pose_seq
 from src.utils.frame_interpolation import init_frame_interpolation_model, batch_images_interpolation_tool
 
 
@@ -93,55 +93,16 @@ pipe = Pose2VideoPipeline(
 )
 pipe = pipe.to("cuda", dtype=weight_dtype)
 
+# lmk_extractor = LMKExtractor()
+# vis = FaceMeshVisualizer()
+
 frame_inter_model = init_frame_interpolation_model()
 
-def get_headpose_temp(input_video):
-    lmk_extractor = LMKExtractor()
-    cap = cv2.VideoCapture(input_video)
-
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
-    fps = cap.get(cv2.CAP_PROP_FPS)  
-
-    trans_mat_list = []
-    while cap.isOpened():
-        ret, frame = cap.read()
-        if not ret:
-            break
-
-        result = lmk_extractor(frame)
-        trans_mat_list.append(result['trans_mat'].astype(np.float32))
-    cap.release()
-
-    trans_mat_arr = np.array(trans_mat_list)
-
-    # compute delta pose
-    trans_mat_inv_frame_0 = np.linalg.inv(trans_mat_arr[0])
-    pose_arr = np.zeros([trans_mat_arr.shape[0], 6])
-
-    for i in range(pose_arr.shape[0]):
-        pose_mat = trans_mat_inv_frame_0 @ trans_mat_arr[i]
-        euler_angles, translation_vector = matrix_to_euler_and_translation(pose_mat)
-        pose_arr[i, :3] =  euler_angles
-        pose_arr[i, 3:6] =  translation_vector
-
-    # interpolate to 30 fps
-    new_fps = 30
-    old_time = np.linspace(0, total_frames / fps, total_frames)
-    new_time = np.linspace(0, total_frames / fps, int(total_frames * new_fps / fps))
-
-    pose_arr_interp = np.zeros((len(new_time), 6))
-    for i in range(6):
-        interp_func = interp1d(old_time, pose_arr[:, i])
-        pose_arr_interp[:, i] = interp_func(new_time)
-
-    pose_arr_smooth = smooth_pose_seq(pose_arr_interp)
-    
-    return pose_arr_smooth
-
-def audio2video(input_audio, ref_img, headpose_video=None, size=512, steps=25, length=60, seed=42, acc_flag=True):   
+@spaces.GPU
+def audio2video(input_audio, ref_img, headpose_video=None, size=512, steps=25, length=60, seed=42):   
     fps = 30
     cfg = 3.5
-    fi_step = 3 if acc_flag else 1
+    fi_step = 3
 
     generator = torch.manual_seed(seed)
     
@@ -154,9 +115,9 @@ def audio2video(input_audio, ref_img, headpose_video=None, size=512, steps=25, l
     time_str = datetime.now().strftime("%H%M")
     save_dir_name = f"{time_str}--seed_{seed}-{size}x{size}"
 
-    save_dir = Path(f"output/{date_str}/{save_dir_name}")
+    save_dir = Path(f"a2v_output/{date_str}/{save_dir_name}")
     while os.path.exists(save_dir):
-        save_dir = Path(f"output/{date_str}/{save_dir_name}_{np.random.randint(10000):04d}")
+        save_dir = Path(f"a2v_output/{date_str}/{save_dir_name}_{np.random.randint(10000):04d}")
     save_dir.mkdir(exist_ok=True, parents=True)
 
     ref_image_np = cv2.cvtColor(ref_img, cv2.COLOR_RGB2BGR)
@@ -200,8 +161,16 @@ def audio2video(input_audio, ref_img, headpose_video=None, size=512, steps=25, l
         pose_images.append(lmk_img)
 
     pose_list = []
+    # pose_tensor_list = []
+
+    # pose_transform = transforms.Compose(
+    #     [transforms.Resize((height, width)), transforms.ToTensor()]
+    # )
     args_L = len(pose_images) if length==0 or length > len(pose_images) else length
+    args_L = min(args_L, 90)
     for pose_image_np in pose_images[: args_L : fi_step]:
+        # pose_image_pil = Image.fromarray(cv2.cvtColor(pose_image_np, cv2.COLOR_BGR2RGB))
+        # pose_tensor_list.append(pose_transform(pose_image_pil))
         pose_image_np = cv2.resize(pose_image_np,  (width, height))
         pose_list.append(pose_image_np)
     
@@ -221,8 +190,7 @@ def audio2video(input_audio, ref_img, headpose_video=None, size=512, steps=25, l
         generator=generator,
     ).videos
     
-    if acc_flag:
-        video = batch_images_interpolation_tool(video, frame_inter_model, inter_frames=fi_step-1)
+    video = batch_images_interpolation_tool(video, frame_inter_model, inter_frames=fi_step-1)
 
     save_path = f"{save_dir}/{size}x{size}_{time_str}_noaudio.mp4"
     save_videos_grid(
@@ -232,6 +200,11 @@ def audio2video(input_audio, ref_img, headpose_video=None, size=512, steps=25, l
         fps=fps,
     )
     
+    # save_path = f"{save_dir}/{size}x{size}_{time_str}_noaudio"
+    # save_pil_imgs(video, save_path)
+    
+    # save_path = batch_images_interpolation_tool(save_path, frame_inter_model, int(fps))
+    
     stream = ffmpeg.input(save_path)
     audio = ffmpeg.input(input_audio)
     ffmpeg.output(stream.video, audio.audio, save_path.replace('_noaudio.mp4', '.mp4'), vcodec='copy', acodec='aac', shortest=None).run()
@@ -239,9 +212,10 @@ def audio2video(input_audio, ref_img, headpose_video=None, size=512, steps=25, l
     
     return save_path.replace('_noaudio.mp4', '.mp4'), ref_image_pil
 
-def video2video(ref_img, source_video, size=512, steps=25, length=60, seed=42, acc_flag=True):
+@spaces.GPU
+def video2video(ref_img, source_video, size=512, steps=25, length=60, seed=42):
     cfg = 3.5
-    fi_step = 3 if acc_flag else 1
+    fi_step = 3
     
     generator = torch.manual_seed(seed)
     
@@ -254,9 +228,9 @@ def video2video(ref_img, source_video, size=512, steps=25, length=60, seed=42, a
     time_str = datetime.now().strftime("%H%M")
     save_dir_name = f"{time_str}--seed_{seed}-{size}x{size}"
 
-    save_dir = Path(f"output/{date_str}/{save_dir_name}")
+    save_dir = Path(f"v2v_output/{date_str}/{save_dir_name}")
     while os.path.exists(save_dir):
-        save_dir = Path(f"output/{date_str}/{save_dir_name}_{np.random.randint(10000):04d}")
+        save_dir = Path(f"v2v_output/{date_str}/{save_dir_name}_{np.random.randint(10000):04d}")
     save_dir.mkdir(exist_ok=True, parents=True)
     
     ref_image_np = cv2.cvtColor(ref_img, cv2.COLOR_RGB2BGR)
@@ -276,6 +250,9 @@ def video2video(ref_img, source_video, size=512, steps=25, length=60, seed=42, a
 
     source_images = read_frames(source_video)
     src_fps = get_fps(source_video)
+    pose_transform = transforms.Compose(
+        [transforms.Resize((height, width)), transforms.ToTensor()]
+    )
     
     step = 1
     if src_fps == 60:
@@ -286,6 +263,7 @@ def video2video(ref_img, source_video, size=512, steps=25, length=60, seed=42, a
     verts_list = []
     bs_list = []
     args_L = len(source_images) if length==0 or length*step > len(source_images) else length*step
+    args_L = min(args_L, 90*step)
     for src_image_pil in source_images[: args_L : step*fi_step]:
         src_img_np = cv2.cvtColor(np.array(src_image_pil), cv2.COLOR_RGB2BGR)
         frame_height, frame_width, _ = src_img_np.shape
@@ -343,8 +321,7 @@ def video2video(ref_img, source_video, size=512, steps=25, length=60, seed=42, a
         generator=generator,
     ).videos
     
-    if acc_flag:
-        video = batch_images_interpolation_tool(video, frame_inter_model, inter_frames=fi_step-1)
+    video = batch_images_interpolation_tool(video, frame_inter_model, inter_frames=fi_step-1)
 
     save_path = f"{save_dir}/{size}x{size}_{time_str}_noaudio.mp4"
     save_videos_grid(
@@ -353,7 +330,12 @@ def video2video(ref_img, source_video, size=512, steps=25, length=60, seed=42, a
         n_rows=1,
         fps=src_fps,
     )
-     
+    
+    # save_path = f"{save_dir}/{size}x{size}_{time_str}_noaudio"
+    # save_pil_imgs(video, save_path)
+    
+    # save_path = batch_images_interpolation_tool(save_path, frame_inter_model, int(src_fps))
+    
     audio_output = f'{save_dir}/audio_from_video.aac'
     # extract audio
     try:
@@ -384,10 +366,15 @@ description = r"""
 <b>Official 🤗 Gradio demo</b> for <a href='https://github.com/Zejun-Yang/AniPortrait' target='_blank'><b>AniPortrait: Audio-Driven Synthesis of Photorealistic Portrait Animations</b></a>.<br>
 """
 
+tips = r"""
+Here is an accelerated version of AniPortrait. Due to limitations in computing power, the wait time will be quite long. Please utilize the source code to experience the full performance.
+"""
+
 with gr.Blocks() as demo:
     
     gr.Markdown(title)
     gr.Markdown(description)
+    gr.Markdown(tips)
     
     with gr.Tab("Audio2video"):
         with gr.Row():
@@ -398,16 +385,14 @@ with gr.Blocks() as demo:
                     a2v_headpose_video = gr.Video(label="Option: upload head pose reference video", sources="upload")
 
                 with gr.Row():
-                    a2v_size_slider = gr.Slider(minimum=256, maximum=768, step=8, value=512, label="Video size (-W & -H)")
-                    a2v_step_slider = gr.Slider(minimum=5, maximum=30, step=1, value=25, label="Steps (--steps)")
+                    a2v_size_slider = gr.Slider(minimum=256, maximum=512, step=8, value=384, label="Video size (-W & -H)")
+                    a2v_step_slider = gr.Slider(minimum=5, maximum=20, step=1, value=15, label="Steps (--steps)")
                 
                 with gr.Row():
-                    a2v_length = gr.Slider(minimum=0, maximum=9999, step=1, value=60, label="Length (-L) (Set to 0 to automatically calculate length)")
+                    a2v_length = gr.Slider(minimum=0, maximum=90, step=1, value=30, label="Length (-L)")
                     a2v_seed = gr.Number(value=42, label="Seed (--seed)")
                 
-                with gr.Row():
-                    a2v_acc_flag = gr.Checkbox(value=True, label="Accelerate")
-                    a2v_botton = gr.Button("Generate", variant="primary")
+                a2v_botton = gr.Button("Generate", variant="primary")
             a2v_output_video = gr.PlayableVideo(label="Result", interactive=False)
         
         gr.Examples(
@@ -418,6 +403,7 @@ with gr.Blocks() as demo:
                 ],
             inputs=[a2v_input_audio, a2v_ref_img, a2v_headpose_video],
         )
+            
     
     with gr.Tab("Video2video"):
         with gr.Row():
@@ -427,16 +413,14 @@ with gr.Blocks() as demo:
                     v2v_source_video = gr.Video(label="Upload source video", sources="upload")
                 
                 with gr.Row():
-                    v2v_size_slider = gr.Slider(minimum=256, maximum=768, step=8, value=512, label="Video size (-W & -H)")
-                    v2v_step_slider = gr.Slider(minimum=5, maximum=30, step=1, value=25, label="Steps (--steps)")
+                    v2v_size_slider = gr.Slider(minimum=256, maximum=512, step=8, value=384, label="Video size (-W & -H)")
+                    v2v_step_slider = gr.Slider(minimum=5, maximum=20, step=1, value=15, label="Steps (--steps)")
                 
                 with gr.Row():
-                    v2v_length = gr.Slider(minimum=0, maximum=9999, step=1, value=60, label="Length (-L) (Set to 0 to automatically calculate length)")
+                    v2v_length = gr.Slider(minimum=0, maximum=90, step=1, value=30, label="Length (-L)")
                     v2v_seed = gr.Number(value=42, label="Seed (--seed)")
                 
-                with gr.Row():
-                    v2v_acc_flag = gr.Checkbox(value=True, label="Accelerate")
-                    v2v_botton = gr.Button("Generate", variant="primary")
+                v2v_botton = gr.Button("Generate", variant="primary")
             v2v_output_video = gr.PlayableVideo(label="Result", interactive=False)
             
         gr.Examples(
@@ -451,14 +435,14 @@ with gr.Blocks() as demo:
     a2v_botton.click(
         fn=audio2video,
         inputs=[a2v_input_audio, a2v_ref_img, a2v_headpose_video,
-                a2v_size_slider, a2v_step_slider, a2v_length, a2v_seed, a2v_acc_flag], 
+                a2v_size_slider, a2v_step_slider, a2v_length, a2v_seed], 
         outputs=[a2v_output_video, a2v_ref_img]
     )
     v2v_botton.click(
         fn=video2video,
         inputs=[v2v_ref_img, v2v_source_video,
-                v2v_size_slider, v2v_step_slider, v2v_length, v2v_seed, v2v_acc_flag], 
+                v2v_size_slider, v2v_step_slider, v2v_length, v2v_seed], 
         outputs=[v2v_output_video, v2v_ref_img]
     )
     
-demo.launch()
+demo.launch(share=True)
