@@ -7,7 +7,7 @@ from pathlib import Path
 import numpy as np
 import cv2
 import torch
-import spaces
+#import spaces
 
 from diffusers import AutoencoderKL, DDIMScheduler
 from einops import repeat
@@ -118,7 +118,7 @@ pipe = pipe.to("cuda", dtype=weight_dtype)
 frame_inter_model = init_frame_interpolation_model()
 
 
-@spaces.GPU
+#@spaces.GPU
 def audio2video(
     input_audio, ref_img, headpose_video=None, size=512, steps=25, length=60, seed=42
 ):
@@ -254,7 +254,7 @@ def audio2video(
     return save_path.replace("_noaudio.mp4", ".mp4"), ref_image_pil
 
 
-@spaces.GPU
+#@spaces.GPU
 def video2video(ref_img, source_video, size=512, steps=25, length=60, seed=42):
     cfg = 3.5
     fi_step = 3
