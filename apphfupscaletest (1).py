@@ -16,6 +16,14 @@ from torchvision import transforms
 from transformers import CLIPVisionModelWithProjection
 from scipy.interpolate import interp1d
 
+from face_enhancer import (
+    get_available_enhancer_names,
+    load_face_enhancer_model,
+    cv2_interpolations,
+)
+
+
+
 from src.models.pose_guider import PoseGuider
 from src.models.unet_2d_condition import UNet2DConditionModel
 from src.models.unet_3d import UNet3DConditionModel
@@ -461,4 +469,51 @@ with gr.Blocks() as demo:
         outputs=[v2v_output_video, v2v_ref_img]
     )
     
+    with gr.Tab("Video Upscale"):
+        with gr.Row():
+            with gr.Column():
+                with gr.Row():
+                    upscale_video = gr.Video(label="Upload video", sources="upload")
+                    upscale_method = gr.Dropdown(
+                        get_available_enhancer_names(),
+                        label="Upscale method",
+                        value="REAL-ESRGAN 4x",
+                    )
+            upscale_botton = gr.Button("Upscale", variant="primary")
+        upscale_output_video = gr.PlayableVideo(
+            label="Upscaled video", interactive=False
+        )
+
+    upscale_botton.click(
+        fn=lambda video, method: upscale_video_with_face_enhancer(video, method),
+        inputs=[upscale_video, upscale_method],
+        outputs=[upscale_output_video],
+    )
+
+    a2v_botton.click(
+        fn=audio2video,
+        inputs=[
+            a2v_input_audio,
+            a2v_ref_img,
+            a2v_headpose_video,
+            a2v_size_slider,
+            a2v_step_slider,
+            a2v_length,
+            a2v_seed,
+        ],
+        outputs=[a2v_output_video, a2v_ref_img],
+    )
+    v2v_botton.click(
+        fn=video2video,
+        inputs=[
+            v2v_ref_img,
+            v2v_source_video,
+            v2v_size_slider,
+            v2v_step_slider,
+            v2v_length,
+            v2v_seed,
+        ],
+        outputs=[v2v_output_video, v2v_ref_img],
+    )
+
 demo.launch(share=True)
