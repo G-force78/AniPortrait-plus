@@ -22,11 +22,11 @@ def codeformer_runner(img, model):
 
 
 supported_enhancers = {
-    "CodeFormer": ("./assets/pretrained_models/codeformer.onnx", codeformer_runner),
-    "GFPGAN": ("./assets/pretrained_models/GFPGANv1.4.pth", gfpgan_runner),
-    "REAL-ESRGAN 2x": ("./assets/pretrained_models/RealESRGAN_x2.pth", realesrgan_runner),
-    "REAL-ESRGAN 4x": ("./assets/pretrained_models/RealESRGAN_x4.pth", realesrgan_runner),
-    "REAL-ESRGAN 8x": ("./assets/pretrained_models/RealESRGAN_x8.pth", realesrgan_runner)
+    "CodeFormer": ("./pretrained_models/codeformer.onnx", codeformer_runner),
+    "GFPGAN": ("./pretrained_models/GFPGANv1.4.pth", gfpgan_runner),
+    "REAL-ESRGAN 2x": ("./pretrained_models/RealESRGAN_x2.pth", realesrgan_runner),
+    "REAL-ESRGAN 4x": ("./pretrained_models/RealESRGAN_x4.pth", realesrgan_runner),
+    "REAL-ESRGAN 8x": ("./pretrained_models/RealESRGAN_x8.pth", realesrgan_runner)
 }
 
 cv2_interpolations = ["LANCZOS4", "CUBIC", "NEAREST"]
