@@ -704,7 +704,7 @@ with gr.Blocks() as demo:
                     video_path_textbox = gr.Textbox(label="Enter video path:")
                     upscale_method = gr.Dropdown(
                         get_available_enhancer_names(),
-                        label="Upscale method",
+                        label="Upscale method - codeformer slow",
                         value="REAL-ESRGAN 4x",
                     )
         upscale_botton = gr.Button("Upscale", variant="primary")
