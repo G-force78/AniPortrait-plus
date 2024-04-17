@@ -668,7 +668,12 @@ with gr.Blocks() as demo:
                     v2v_source_video = gr.Video(
                         label="Upload source video", sources="upload"
                     )
-
+                    v2v_expand_slider = gr.Slider(
+                      minimum=1.0,
+                      maximum=2.5,
+                      step=0.1,
+                      value=1.5,
+                      label="Expand factor for face cropping")                    
                 with gr.Row():
                     v2v_size_slider = gr.Slider(
                         minimum=256,
