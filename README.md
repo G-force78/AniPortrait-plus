@@ -1,7 +1,7 @@
 # AniPortrait
 
 [2024/04/21] We have released the audio2pose model and [pre-trained weight](https://huggingface.co/ZJYang/AniPortrait/tree/main) for audio2video. Please update the code and download the weight file to experience.
-
+https://huggingface.co/ZJYang/AniPortrait/resolve/main/audio2pose.pt
 
 **AniPortrait: Audio-Driven Synthesis of Photorealistic Portrait Animations**
 
