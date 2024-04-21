@@ -1,5 +1,8 @@
 # AniPortrait
 
+[2024/04/21] We have released the audio2pose model and [pre-trained weight](https://huggingface.co/ZJYang/AniPortrait/tree/main) for audio2video. Please update the code and download the weight file to experience.
+
+
 **AniPortrait: Audio-Driven Synthesis of Photorealistic Portrait Animations**
 
 Author: Huawei Wei, Zejun Yang, Zhisheng Wang
@@ -31,7 +34,7 @@ audio and a reference portrait image. You can also provide a video to achieve fa
 
 - ✅ [2024/04/07] Update a frame interpolation module to accelerate the inference process. Now you can add -acc in inference commands to get a faster video generation.
 
-- 🔲 We will release audio2pose pre-trained weight for audio2video after futher optimization. You can choose head pose template in `./configs/inference/head_pose_temp` as substitution.
+- ✅ [2024/04/21] We have released the audio2pose model and [pre-trained weight](https://huggingface.co/ZJYang/AniPortrait/tree/main) for audio2video. Please update the code and download the weight file to experience.
 
 ## Various Generated Videos
 
