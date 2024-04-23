@@ -61,7 +61,7 @@ def main():
     else:
         weight_dtype = torch.float32
         
-    audio_infer_config = OmegaConf.load(config.audio_inference_config)
+    audio_infer_config = OmegaConf.load(/content/AniPortrait-plus/configs/inference/inference_audio.yaml)
     # prepare model
     a2m_model = Audio2MeshModel(audio_infer_config['a2m_model'])
     a2m_model.load_state_dict(torch.load(audio_infer_config['pretrained_model']['a2m_ckpt']), strict=False)
