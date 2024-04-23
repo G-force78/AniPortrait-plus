@@ -37,7 +37,7 @@ from src.utils.frame_interpolation import init_frame_interpolation_model, batch_
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default='./configs/prompts/animation_audio.yaml')
+    parser.add_argument("--config", type=str, default='/content/AniPortrait-plus/configs/inference/inference_audio.yaml')
     parser.add_argument("-W", type=int, default=512)
     parser.add_argument("-H", type=int, default=512)
     parser.add_argument("-L", type=int)
@@ -61,7 +61,7 @@ def main():
     else:
         weight_dtype = torch.float32
         
-    audio_infer_config = OmegaConf.load(/content/AniPortrait-plus/configs/inference/inference_audio.yaml)
+    audio_infer_config = OmegaConf.load(config.audio_inference_config)
     # prepare model
     a2m_model = Audio2MeshModel(audio_infer_config['a2m_model'])
     a2m_model.load_state_dict(torch.load(audio_infer_config['pretrained_model']['a2m_ckpt']), strict=False)
