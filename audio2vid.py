@@ -37,14 +37,14 @@ from src.utils.frame_interpolation import init_frame_interpolation_model, batch_
 
 def parse_args():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default='/content/AniPortrait-plus/configs/inference/inference_audio.yaml')
+    parser.add_argument("--config", type=str, default='./configs/prompts/animation_audio.yaml')
     parser.add_argument("-W", type=int, default=512)
     parser.add_argument("-H", type=int, default=512)
     parser.add_argument("-L", type=int)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--cfg", type=float, default=3.5)
-    parser.add_argument("--steps", type=int, default=25)
-    parser.add_argument("--fps", type=int, default=30)
+    parser.add_argument("--steps", type=int, default=15)
+    parser.add_argument("--fps", type=int, default=20)
     parser.add_argument("-acc", "--accelerate", action='store_true')
     parser.add_argument("--fi_step", type=int, default=3)
     args = parser.parse_args()
